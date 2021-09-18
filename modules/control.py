@@ -52,12 +52,37 @@ class PID(Controller):
 
 class FullStateFeedback(Controller):
 
-    def __init__(self, K, setpoint=np.array([0,0,0,0]).T):
+    def __init__(self, K, setpoint=np.array([0,0,0,0]).T, energy_opts=None):
         super().__init__(setpoint)
         self.K = K
 
+        # how much energy (relative to the target state) do we want before we switch
+        # from energy-based control to the standard control law
+        if energy_opts is not None:
+            self.energy_function = energy_opts['energy function']
+            self.energy_factor = energy_opts['energy factor']
+            self.init_kick_angle_tol = energy_opts['angle tolerance']
+            self.init_kick_rate_tol = energy_opts['rate tolerance']
+            self.target_energy = self.energy_function(setpoint)
+            self.swing_up_control = True
+        else:
+            self.energy_function = None
+            self.swing_up_control = False
+
     def get_control_action(self, state_vector, dt):
         # return super().get_control_action(state_vector)
-        control_force = -self.K@(self.setpoint - state_vector) # TODO: NOT SURE THIS IS RIGHT (should I take the difference from the setpoint?)
-        print(f"state vector: {state_vector}, control_force: {control_force}")
+
+        control_force = -self.K@(state_vector - self.setpoint)
+
+        if self.swing_up_control:
+            current_energy = self.energy_function(state_vector)
+
+            angle, angular_rate = state_vector[2:]
+
+            if current_energy < self.energy_factor*self.target_energy:
+                if np.abs(angle - np.pi) < self.init_kick_angle_tol and np.abs(angular_rate) < self.init_kick_rate_tol:
+                    angular_rate = 10 # initial kick
+
+                control_force = (current_energy - self.target_energy)*angular_rate*np.cos(angle)
+
         return control_force

@@ -22,6 +22,8 @@ from modules.control import FullStateFeedback, PID
 #   - show trajectory history
 # - Resize window correctly
 #   - Store point information in nondimensional form?
+# - Swing up
+#   - use energy difference control law (see ZIPY project: https://blog.benwiener.com/programming/2018/05/10/cart-pole.html)
 
 # simulation properties
 FPS = 60
@@ -34,10 +36,20 @@ def run_sim():
     table = create_table(WINDOW)
 
     state = State(cart_mass=1, cart_init_pos=cart_init_pos_physical, cart_display_obj=cart_obj)
-    state.cart.add_linkage(linkage_mass=0.2, linkage_length=200e-3, linkage_angle=0.05)
+    state.cart.add_linkage(linkage_mass=0.2, linkage_length=200e-3, linkage_angle=np.pi)
+
+    energy_options = {
+        'energy function': state.get_total_energy,
+        'energy factor': 0.98,
+        'angle tolerance': 0.1,
+        'rate tolerance': 0.001
+    }
     
     controller_setpoint = np.array([cart_init_pos_physical.x, 0, 0, 0]).T
-    state.assign_controller(FullStateFeedback(K=np.array([0.000000000000425, 0.1, 30.290107277097590, 0.1]), setpoint=controller_setpoint))
+    controller_gains = np.array([-1.598369011213056, -3.329935440027197, -21.998231736323493, -3.687982784007255])
+    state.assign_controller(FullStateFeedback(K=controller_gains,
+                                              setpoint=controller_setpoint,
+                                              energy_opts=energy_options))
 
     continue_sim = True
     paused = True
